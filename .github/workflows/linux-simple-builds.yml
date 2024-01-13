@@ -1,0 +1,43 @@
+name: Linux builds (basic)
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: ${{matrix.cxx}}, ${{matrix.build_type}}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        cxx:
+          # For this we just want whatever compiler
+          - clang++
+        build_type: [Debug, Release]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+
+
+    - name: Prepare environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build
+
+    - name: Configure build
+      working-directory: ${{runner.workspace}}
+      run: |
+        cmake -B build -S $GITHUB_WORKSPACE \
+              -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+              -DCATCH_DEVELOPMENT_BUILD=ON \
+              -G Ninja
+
+    - name: Build tests + lib
+      working-directory: ${{runner.workspace}}/build
+      run: ninja
+
+    - name: Run tests
+      env:
+          CTEST_OUTPUT_ON_FAILURE: 1
+      working-directory: ${{runner.workspace}}/build
+      run: ctest -C ${{matrix.build_type}} -j `nproc`
