@@ -122,3 +122,67 @@ public:
         return transposeBack(m_a + emul.upper);
     }
 };
+
+// modified variant of lemire_algorithm_reuse
+template <typename IntegerType>
+class lemire_algorithm_lazy_reuse {
+    static_assert(std::is_integral<IntegerType>::value, "...");
+
+    using UnsignedIntegerType = Catch::Detail::make_unsigned_t<IntegerType>;
+
+
+    UnsignedIntegerType m_a;
+    UnsignedIntegerType m_ab_distance;
+    UnsignedIntegerType m_rejection_threshold; // must be <m_ab_distance, so -1 is a valid "none" option
+    static constexpr UnsignedIntegerType NONE = static_cast<UnsignedIntegerType>(-1);
+
+    UnsignedIntegerType computeDistance(IntegerType a, IntegerType b) const {
+        return transposeTo(b) - transposeTo(a) + 1;
+    }
+
+    static UnsignedIntegerType computeRejectionThreshold(UnsignedIntegerType ab_distance) {
+        if (ab_distance == 0) { return 0; }
+        return (~ab_distance + 1) % ab_distance;
+    }
+
+    static UnsignedIntegerType transposeTo(IntegerType in) {
+        return Catch::Detail::transposeToNaturalOrder<IntegerType>(
+            static_cast<UnsignedIntegerType>(in));
+    }
+    static IntegerType transposeBack(UnsignedIntegerType in) {
+        return static_cast<IntegerType>(
+            Catch::Detail::transposeToNaturalOrder<IntegerType>(in));
+    }
+
+public:
+    using result_type = IntegerType;
+
+    lemire_algorithm_lazy_reuse(IntegerType a, IntegerType b) :
+        m_a(transposeTo(a)),
+        m_ab_distance(computeDistance(a, b)),
+        m_rejection_threshold(NONE) {
+        assert(a <= b);
+    }
+
+    template <typename Generator>
+    result_type operator()(Generator& g) {
+        // All possible values of result_type are valid.
+        if (m_ab_distance == 0) {
+            return transposeBack(Catch::Detail::fillBitsFrom<UnsignedIntegerType>(g));
+        }
+
+        auto random_number = Catch::Detail::fillBitsFrom<UnsignedIntegerType>(g);
+        auto emul = Catch::Detail::extendedMult(random_number, m_ab_distance);
+        if (emul.lower < m_ab_distance) {
+            if (m_rejection_threshold == NONE) {
+                m_rejection_threshold = computeRejectionThreshold(m_ab_distance);
+            }
+            while (emul.lower < m_rejection_threshold) {
+                random_number = Catch::Detail::fillBitsFrom<UnsignedIntegerType>(g);
+                emul = Catch::Detail::extendedMult(random_number, m_ab_distance);
+            }
+        }
+
+        return transposeBack(m_a + emul.upper);
+    }
+};

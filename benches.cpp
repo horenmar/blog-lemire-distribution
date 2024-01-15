@@ -12,10 +12,20 @@
 #include "distributions.hpp"
 #include "inlining-blocker.hpp"
 
-TEMPLATE_TEST_CASE("both distributions return the same numbers", "[reproducibility]", uint32_t, uint64_t) {
+template <template <typename T> class Dist> struct dist {
+	template <typename T> using type = Dist<T>;
+};
+
+TEMPLATE_TEST_CASE("both distributions return the same numbers", "[reproducibility]",
+	lemire_algorithm_reuse<uint32_t>,
+	lemire_algorithm_reuse<uint64_t>,
+	lemire_algorithm_lazy_reuse<uint32_t>,
+	lemire_algorithm_lazy_reuse<uint64_t>
+) {
 	static constexpr size_t iters = 100'000;
-	lemire_algorithm_reuse<TestType> reuse(0, 1'000'000);
-	lemire_algorithm_no_reuse<TestType> noreuse(0, 1'000'000);
+	using T = typename TestType::result_type;
+	TestType reuse(0, 1'000'000);
+	lemire_algorithm_no_reuse<T> noreuse(0, 1'000'000);
 
 	// We use different URBGs to check that the stretching and narrowing
 	// of the bits also happens in the same way.
@@ -33,7 +43,7 @@ TEMPLATE_TEST_CASE("both distributions return the same numbers", "[reproducibili
 	}
 }
 
-TEST_CASE("std and Catch2 implement the same distribution", "[reproducibility]") {
+TEMPLATE_TEST_CASE("std and Catch2 implement the same distribution", "[reproducibility]", dist<lemire_algorithm_reuse>, dist<lemire_algorithm_lazy_reuse>) {
 	static constexpr size_t iters = 100'000;
 	// Note: We only test cases where the output width of the generator
 	//       is the same as the width of the distribution type. In other
@@ -42,7 +52,7 @@ TEST_CASE("std and Catch2 implement the same distribution", "[reproducibility]")
 	SECTION("32 -> 32") {
 		SimplePcg32 rng1, rng2;
 		std::uniform_int_distribution<uint32_t> stddist(0, 100'000);
-		lemire_algorithm_reuse<uint32_t> catchdist(0, 100'000);
+		typename TestType::type<uint32_t> catchdist(0, 100'000);
 		for (size_t i = 0; i < iters; ++i) {
 			REQUIRE(stddist(rng1) == catchdist(rng2));
 		}
@@ -50,7 +60,7 @@ TEST_CASE("std and Catch2 implement the same distribution", "[reproducibility]")
 	SECTION("64 -> 64") {
 		std::mt19937_64 rng1, rng2;
 		std::uniform_int_distribution<uint64_t> stddist(0, 100'000);
-		lemire_algorithm_reuse<uint64_t> catchdist(0, 100'000);
+		typename TestType::type<uint64_t> catchdist(0, 100'000);
 		for (size_t i = 0; i < iters; ++i) {
 			REQUIRE(stddist(rng1) == catchdist(rng2));
 		}
@@ -89,6 +99,16 @@ TEMPLATE_TEST_CASE("no-reuse bench", "[!benchmark]", uint32_t, uint64_t) {
 			return sum;
 		};
 	}
+	SECTION("lazy-reuse") {
+		BENCHMARK("lazy-reuse, iters=" + std::to_string(iters)) {
+			TestType sum = 0;
+			for (size_t high_now = 0; high_now < iters; ++high_now) {
+				lemire_algorithm_lazy_reuse<TestType> dist(0, high_now);
+				sum += dist(rng);
+			}
+			return sum;
+		};
+	}
 }
 
 template <typename TestType>
@@ -117,6 +137,16 @@ static void RunBenchmarksWithPremadeDistributions(TestType right_bound, size_t i
 		BENCHMARK("reuse, iters=" + std::to_string(iters)) {
 			TestType sum = 0;
 			lemire_algorithm_reuse<TestType> dist(0, same(right_bound));
+			for (size_t n = 0; n < iters; ++n) {
+				sum += dist(rng);
+			}
+			return sum;
+		};
+	}
+	SECTION("lazy-reuse") {
+		BENCHMARK("lazy-reuse, iters=" + std::to_string(iters)) {
+			TestType sum = 0;
+			lemire_algorithm_lazy_reuse<TestType> dist(0, same(right_bound));
 			for (size_t n = 0; n < iters; ++n) {
 				sum += dist(rng);
 			}
