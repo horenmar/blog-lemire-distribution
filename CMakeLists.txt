@@ -17,8 +17,11 @@ endif()
 add_subdirectory(Catch2)
 
 add_executable(benches
-    benches.cpp
-    distributions.hpp
+    benches-part1.cpp
+    benches-part2.cpp
+    distributions-lemire.hpp
+    distributions-others.hpp
+    emul.hpp
     pcg.hpp
     inlining-blocker.cpp
     inlining-blocker.hpp

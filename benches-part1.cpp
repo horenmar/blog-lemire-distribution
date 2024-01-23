@@ -9,7 +9,7 @@
 #include <cstdint>
 
 #include "pcg.hpp"
-#include "distributions.hpp"
+#include "distributions-lemire.hpp"
 #include "inlining-blocker.hpp"
 
 template <template <typename T> class Dist> struct dist {

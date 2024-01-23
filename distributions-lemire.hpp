@@ -48,8 +48,6 @@ public:
 
         auto random_number = Catch::Detail::fillBitsFrom<UnsignedIntegerType>(g);
         auto emul = Catch::Detail::extendedMult(random_number, ab_distance);
-        // Unlike Lemire's algorithm we skip the ab_distance check, since
-        // we precomputed the rejection threshold, which is always tighter.
         if (emul.lower < ab_distance) {
             auto rejection_threshold = computeRejectionThreshold(ab_distance);
             while (emul.lower < rejection_threshold) {
@@ -184,5 +182,98 @@ public:
         }
 
         return transposeBack(m_a + emul.upper);
+    }
+};
+
+
+// Takes the multiplication implementation through template
+template <typename MultImplementation>
+class lemire_plain_templated_mult {
+    uint64_t m_a, m_b;
+
+    uint64_t computeDistance(uint64_t a, uint64_t b) const {
+        return b - a + 1;
+    }
+
+    static uint64_t computeRejectionThreshold(uint64_t ab_distance) {
+        return (~ab_distance + 1) % ab_distance;
+    }
+
+    template <typename Generator>
+    uint64_t drawNumber(Generator& g) {
+        return Catch::Detail::fillBitsFrom<uint64_t>(g);
+    }
+
+public:
+    using result_type = uint64_t;
+
+    lemire_plain_templated_mult(uint64_t a, uint64_t b) :
+        m_a(a), m_b(b) {
+        assert(a <= b);
+    }
+
+    template <typename Generator>
+    result_type operator()(Generator& g) {
+        auto ab_distance = computeDistance(m_a, m_b);
+        // All possible values of result_type are valid.
+        if (ab_distance == 0) {
+            return drawNumber(g);
+        }
+
+        auto random_number = drawNumber(g);
+        auto emul = MultImplementation::Mult(random_number, ab_distance);
+        if (emul.lower < ab_distance) {
+            auto rejection_threshold = computeRejectionThreshold(ab_distance);
+            while (emul.lower < rejection_threshold) {
+                random_number = drawNumber(g);
+                emul = MultImplementation::Mult(random_number, ab_distance);
+            }
+        }
+
+        return m_a + emul.upper;
+    }
+};
+
+// Takes the multiplication implementation through template
+template <typename MultImplementation>
+class lemire_reuse_templated_mult {
+    uint64_t m_a, m_ab_distance, m_threshold;
+
+    uint64_t computeDistance(uint64_t a, uint64_t b) const {
+        return b - a + 1;
+    }
+
+    static uint64_t computeRejectionThreshold(uint64_t ab_distance) {
+        return (~ab_distance + 1) % ab_distance;
+    }
+
+    template <typename Generator>
+    uint64_t drawNumber(Generator& g) {
+        return Catch::Detail::fillBitsFrom<uint64_t>(g);
+    }
+
+public:
+    using result_type = uint64_t;
+
+    lemire_reuse_templated_mult(uint64_t a, uint64_t b) :
+        m_a(a), m_ab_distance(computeDistance(a, b)), m_threshold(computeRejectionThreshold(m_ab_distance)) {
+        assert(a <= b);
+    }
+
+    template <typename Generator>
+    result_type operator()(Generator& g) {
+        // All possible values of result_type are valid.
+        if (m_ab_distance == 0) {
+            return drawNumber(g);
+        }
+
+        auto random_number = drawNumber(g);
+        auto emul = MultImplementation::Mult(random_number, m_ab_distance);
+        while (emul.lower < m_threshold) {
+            random_number = drawNumber(g);
+            emul = MultImplementation::Mult(random_number, m_ab_distance);
+        }
+
+        return m_a + emul.upper;
     }
 };
