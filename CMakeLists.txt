@@ -22,9 +22,10 @@ add_executable(benches
     distributions-lemire.hpp
     distributions-others.hpp
     emul.hpp
-    pcg.hpp
     inlining-blocker.cpp
     inlining-blocker.hpp
+    libdivide.h
+    pcg.hpp
 )
 
 target_link_libraries(benches

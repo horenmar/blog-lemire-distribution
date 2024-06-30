@@ -13,44 +13,44 @@
 #include <random>
 
 TEST_CASE("Verify emul results") {
-	std::random_device rd;
-	for (int i = 0; i < 1'000'000; ++i) {
-		auto num1 = Catch::Detail::fillBitsFrom<uint64_t>(rd);
-		auto num2 = Catch::Detail::fillBitsFrom<uint64_t>(rd);
-		CAPTURE(num1, num2);
-		auto result_naive = ext_mul_naive(num1, num2);
-		auto result_optimized = ext_mul_optimized(num1, num2);
-		auto result_intrinsic = ext_mul_intrinsic(num1, num2);
-		REQUIRE(result_naive == result_optimized);
-		REQUIRE(result_optimized == result_intrinsic);
-	}
+    std::random_device rd;
+    for (int i = 0; i < 1'000'000; ++i) {
+        auto num1 = Catch::Detail::fillBitsFrom<uint64_t>(rd);
+        auto num2 = Catch::Detail::fillBitsFrom<uint64_t>(rd);
+        CAPTURE(num1, num2);
+        auto result_naive = ext_mul_naive(num1, num2);
+        auto result_optimized = ext_mul_optimized(num1, num2);
+        auto result_intrinsic = ext_mul_intrinsic(num1, num2);
+        REQUIRE(result_naive == result_optimized);
+        REQUIRE(result_optimized == result_intrinsic);
+    }
 }
 
 
 namespace {
-	struct NaiveMult {
-		static ext_mul_result Mult(uint64_t a, uint64_t b) {
-			return ext_mul_naive(a, b);
-		}
-	};
-	struct OptimizedMult {
-		static ext_mul_result Mult(uint64_t a, uint64_t b) {
-			return ext_mul_optimized(a, b);
-		}
-	};
-	struct IntrinsicMult {
-		static ext_mul_result Mult(uint64_t a, uint64_t b) {
-			return ext_mul_intrinsic(a, b);
-		}
-	};
-	static std::vector<uint64_t> generate_random_data(size_t size) {
-		std::vector<uint64_t> data; data.reserve(size);
-		std::random_device rd;
-		for (size_t i = 0; i < size; ++i) {
-			data.push_back(Catch::Detail::fillBitsFrom<uint64_t>(rd));
-		}
-		return data;
-	}
+    struct NaiveMult {
+        static ext_mul_result Mult(uint64_t a, uint64_t b) {
+            return ext_mul_naive(a, b);
+        }
+    };
+    struct OptimizedMult {
+        static ext_mul_result Mult(uint64_t a, uint64_t b) {
+            return ext_mul_optimized(a, b);
+        }
+    };
+    struct IntrinsicMult {
+        static ext_mul_result Mult(uint64_t a, uint64_t b) {
+            return ext_mul_intrinsic(a, b);
+        }
+    };
+    static std::vector<uint64_t> generate_random_data(size_t size) {
+        std::vector<uint64_t> data; data.reserve(size);
+        std::random_device rd;
+        for (size_t i = 0; i < size; ++i) {
+            data.push_back(Catch::Detail::fillBitsFrom<uint64_t>(rd));
+        }
+        return data;
+    }
 }
 
 TEST_CASE( "Mod benchmark", "[!benchmark]" ) {
@@ -83,114 +83,147 @@ TEST_CASE( "Mod benchmark", "[!benchmark]" ) {
 }
 
 TEMPLATE_TEST_CASE("Emul benchmarks", "[!benchmark]", NaiveMult, OptimizedMult, IntrinsicMult) {
-	auto size = GENERATE(as<size_t>{}, 10'000, 100'000, 1'000'000);
-	BENCHMARK_ADVANCED("iters=" + std::to_string(size))(Catch::Benchmark::Chronometer meter) {
-		auto data1 = generate_random_data(size);
-		auto data2 = generate_random_data(size);
-		meter.measure([&](int) {
-			uint64_t sum = 0;
-			for (size_t sz = 0; sz < size; ++sz) {
-				auto [high, low] = TestType::Mult(data1[sz], data2[sz]);
-				sum += high;
-				sum += low;
-			}
-			return sum;
-		});
-	};
+    auto size = GENERATE(as<size_t>{}, 10'000, 100'000, 1'000'000);
+    BENCHMARK_ADVANCED("iters=" + std::to_string(size))(Catch::Benchmark::Chronometer meter) {
+        auto data1 = generate_random_data(size);
+        auto data2 = generate_random_data(size);
+        meter.measure([&](int) {
+            uint64_t sum = 0;
+            for (size_t sz = 0; sz < size; ++sz) {
+                auto [high, low] = TestType::Mult(data1[sz], data2[sz]);
+                sum += high;
+                sum += low;
+            }
+            return sum;
+        });
+    };
 }
 
 
 TEMPLATE_TEST_CASE("Distribution tests", "[distributions]",
-	OpenBSD_plain,
-	OpenBSD_reuse,
-	java_plain,
-	java_reuse,
-	lemire_plain_templated_mult<NaiveMult>,
-	lemire_plain_templated_mult<OptimizedMult>,
-	lemire_plain_templated_mult<IntrinsicMult>,
-	lemire_reuse_templated_mult<NaiveMult>,
-	lemire_reuse_templated_mult<OptimizedMult>,
-	lemire_reuse_templated_mult<IntrinsicMult>) {
-	const size_t tests = 10'000;
-	SimplePcg32 pcg(std::random_device{}());
-	SECTION("Some bounds") {
-		uint64_t low = 7;
-		uint64_t high = 22;
-		TestType dist(low, high);
-		for (size_t t = 0; t < tests; ++t) {
-			auto result = dist(pcg);
-			REQUIRE(result >= low);
-			REQUIRE(result <= high);
-		}
-	}
-	SECTION("Unitary bound") {
-		uint64_t low = 42;
-		uint64_t high = low;
-		TestType dist(low, high);
-		for (size_t t = 0; t < tests; ++t) {
-			auto result = dist(pcg);
-			REQUIRE(result >= low);
-			REQUIRE(result <= high);
-		}
-	}
+    OpenBSD_plain,
+    OpenBSD_reuse,
+    OpenBSD_libdivide,
+    java_plain,
+    java_reuse,
+    java_libdivide,
+    lemire_plain_templated_mult<NaiveMult>,
+    lemire_plain_templated_mult<OptimizedMult>,
+    lemire_plain_templated_mult<IntrinsicMult>,
+    lemire_reuse_templated_mult<NaiveMult>,
+    lemire_reuse_templated_mult<OptimizedMult>,
+    lemire_reuse_templated_mult<IntrinsicMult>) {
+    const size_t tests = 10'000;
+    SimplePcg32 pcg(std::random_device{}());
+    SECTION("Some bounds") {
+        uint64_t low = 7;
+        uint64_t high = 22;
+        TestType dist(low, high);
+        for (size_t t = 0; t < tests; ++t) {
+            auto result = dist(pcg);
+            REQUIRE(result >= low);
+            REQUIRE(result <= high);
+        }
+    }
+    SECTION("Unitary bound") {
+        uint64_t low = 42;
+        uint64_t high = low;
+        TestType dist(low, high);
+        for (size_t t = 0; t < tests; ++t) {
+            auto result = dist(pcg);
+            REQUIRE(result >= low);
+            REQUIRE(result <= high);
+        }
+    }
 }
 
 TEMPLATE_TEST_CASE("Benchmark with other distributions", "[!benchmark]",
-	OpenBSD_plain,
-	java_plain,
-	OpenBSD_reuse,
-	java_reuse,
-	lemire_reuse_templated_mult<NaiveMult>,
-	lemire_reuse_templated_mult<OptimizedMult>,
-	lemire_reuse_templated_mult<IntrinsicMult>,
-	lemire_plain_templated_mult<NaiveMult>,
-	lemire_plain_templated_mult<OptimizedMult>,
-	lemire_plain_templated_mult<IntrinsicMult>) {
+    OpenBSD_plain,
+    java_plain,
+    OpenBSD_reuse,
+    java_reuse,
+    OpenBSD_libdivide,
+    java_libdivide,
+    lemire_reuse_templated_mult<NaiveMult>,
+    lemire_reuse_templated_mult<OptimizedMult>,
+    lemire_reuse_templated_mult<IntrinsicMult>,
+    lemire_plain_templated_mult<NaiveMult>,
+    lemire_plain_templated_mult<OptimizedMult>,
+    lemire_plain_templated_mult<IntrinsicMult>) {
 
-	auto bounds = GENERATE(as<uint64_t>{},
-		100,
-		std::numeric_limits<uint32_t>::max() - 1,
-		std::numeric_limits<uint32_t>::max(),
-		uint64_t(std::numeric_limits<uint32_t>::max()) + 1,
-		uint64_t(1) << 36,
-		uint64_t(1) << 40,
-		uint64_t(1) << 44,
-		uint64_t(1) << 48,
-		uint64_t(1) << 52,
-		uint64_t(1) << 56,
-		uint64_t(1) << 60,
-		std::numeric_limits<uint64_t>::max() / 2 + 1,
-		12298110947468241578,
-		std::numeric_limits<uint64_t>::max() - 1);
-	auto iters = GENERATE(as<size_t>{}, 100'000, 1'000'000, 10'000'000);
+    auto bounds = GENERATE(as<uint64_t>{},
+        100,
+        std::numeric_limits<uint32_t>::max() - 1,
+        std::numeric_limits<uint32_t>::max(),
+        uint64_t(std::numeric_limits<uint32_t>::max()) + 1,
+        uint64_t(1) << 36,
+        uint64_t(1) << 40,
+        uint64_t(1) << 44,
+        uint64_t(1) << 48,
+        uint64_t(1) << 52,
+        uint64_t(1) << 56,
+        uint64_t(1) << 60,
+        std::numeric_limits<uint64_t>::max() / 2 + 1,
+        12298110947468241578,
+        std::numeric_limits<uint64_t>::max() - 1);
+    auto iters = GENERATE(as<size_t>{}, 100'000, 1'000'000, 10'000'000);
 
-	SimplePcg32 rng;
-	BENCHMARK("bounds=" + std::to_string(bounds) + ", iters=" + std::to_string(iters)) {
-		uint64_t sum = 0;
-		TestType dist(0, same(bounds));
-		for (size_t n = 0; n < iters; ++n) {
-			sum += dist(rng);
-		}
-		return sum;
-	};
+    SimplePcg32 rng;
+    BENCHMARK("bounds=" + std::to_string(bounds) + ", iters=" + std::to_string(iters)) {
+        uint64_t sum = 0;
+        TestType dist(0, same(bounds));
+        for (size_t n = 0; n < iters; ++n) {
+            sum += dist(rng);
+        }
+        return sum;
+    };
 }
 
 TEMPLATE_TEST_CASE("Benchmark without distribution reuse", "[!benchmark]",
-	OpenBSD_plain,
-	java_plain,
-	lemire_plain_templated_mult<NaiveMult>,
-	lemire_plain_templated_mult<OptimizedMult>,
-	lemire_plain_templated_mult<IntrinsicMult>) {
+    OpenBSD_plain,
+    java_plain,
+    lemire_plain_templated_mult<NaiveMult>,
+    lemire_plain_templated_mult<OptimizedMult>,
+    lemire_plain_templated_mult<IntrinsicMult>) {
 
-	size_t iters = GENERATE(100'000, 1'000'000, 10'000'000);
+    size_t iters = GENERATE(100'000, 1'000'000, 10'000'000);
 
-	SimplePcg32 rng;
-	BENCHMARK("iters=" + std::to_string(iters)) {
-		uint64_t sum = 0;
-		for (size_t high_now = 0; high_now < iters; ++high_now) {
-			TestType dist(0, high_now);
-			sum += dist(rng);
-		}
-		return sum;
-	};
+    SimplePcg32 rng;
+    BENCHMARK("iters=" + std::to_string(iters)) {
+        uint64_t sum = 0;
+        for (size_t high_now = 0; high_now < iters; ++high_now) {
+            TestType dist(0, high_now);
+            sum += dist(rng);
+        }
+        return sum;
+    };
+}
+
+
+template <typename Dist1, typename Dist2>
+void CheckEqualResultsForDists( uint64_t a, uint64_t b ) {
+    Dist1 d1( a, b );
+    Dist2 d2( a, b );
+    const auto rand_seed = std::random_device{}();
+    CAPTURE( rand_seed );
+    SimplePcg32 pcg1( rand_seed ), pcg2( rand_seed );
+    for (size_t i = 0; i < 100'000; ++i) {
+        REQUIRE(d1( pcg1 ) == d2( pcg2 ));
+    }
+}
+
+TEST_CASE( "Check that different distribution variants have the same results", "[distributions]" ) {
+    CheckEqualResultsForDists<java_plain, java_reuse>( 3, 17 );
+    CheckEqualResultsForDists<java_plain, java_reuse>( 7, 1567894 );
+    CheckEqualResultsForDists<java_plain, java_libdivide>( 3, 17 );
+    CheckEqualResultsForDists<java_plain, java_libdivide>( 7, 1567894 );
+
+    CheckEqualResultsForDists<OpenBSD_plain, OpenBSD_reuse>( 3, 17 );
+    CheckEqualResultsForDists<OpenBSD_plain, OpenBSD_reuse>( 7, 1567894 );
+    CheckEqualResultsForDists<OpenBSD_plain, OpenBSD_libdivide>( 3, 17 );
+    CheckEqualResultsForDists<OpenBSD_plain, OpenBSD_libdivide>( 7, 1567894 );
+
+    CheckEqualResultsForDists<lemire_plain_templated_mult<IntrinsicMult>, lemire_reuse_templated_mult<IntrinsicMult>>( 3, 17 );
+    CheckEqualResultsForDists<lemire_plain_templated_mult<IntrinsicMult>, lemire_reuse_templated_mult<IntrinsicMult>>(
+        7, 1567894 );
 }

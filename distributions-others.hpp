@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "libdivide.h"
 
 class java_plain {
 private:
@@ -59,6 +60,39 @@ public:
 		}
 		return m_a + r;
 	}
+};
+
+class java_libdivide {
+private:
+    std::uint64_t m_a, m_distance;
+    libdivide::divider<std::uint64_t> m_divider;
+
+    template <typename Generator>
+    uint64_t drawNumber( Generator& g ) {
+        return Catch::Detail::fillBitsFrom<uint64_t>( g );
+    }
+
+	uint64_t takeMod(uint64_t in) {
+        return in - ( in / m_divider ) * m_distance;
+	}
+
+public:
+    using result_type = std::uint64_t;
+
+    java_libdivide( std::uint64_t a, std::uint64_t b ):
+        m_a( a ), m_distance( b - m_a + 1 ), m_divider( m_distance ) {}
+
+    template <typename Generator>
+    result_type operator()( Generator& g ) {
+        if ( m_distance == 0 ) { return drawNumber( g ); }
+        auto x = drawNumber( g );
+        auto r = takeMod(x);
+        while ( x - r > ( -m_distance ) ) {
+            x = drawNumber( g );
+            r = takeMod(x);
+        }
+        return m_a + r;
+    }
 };
 
 class OpenBSD_plain {
@@ -120,4 +154,36 @@ public:
 
 		return m_a + (x % m_distance);
 	}
+};
+
+class OpenBSD_libdivide {
+private:
+    std::uint64_t m_a, m_distance, m_threshold;
+    libdivide::divider<std::uint64_t> m_divider;
+
+    template <typename Generator>
+    uint64_t drawNumber( Generator& g ) {
+        return Catch::Detail::fillBitsFrom<uint64_t>( g );
+    }
+
+	uint64_t takeMod( uint64_t in ) { return in - ( in / m_divider ) * m_distance; }
+
+
+public:
+    using result_type = std::uint64_t;
+
+    OpenBSD_libdivide( std::uint64_t a, std::uint64_t b ):
+        m_a( a ), m_distance( b - m_a + 1 ), m_threshold( ( -m_distance ) % m_distance ), m_divider(m_distance) {}
+
+    template <typename Generator>
+    result_type operator()( Generator& g ) {
+        if ( m_distance == 0 ) { return drawNumber( g ); }
+        // do while?
+        auto x = drawNumber( g );
+        while ( x < m_threshold ) {
+            x = drawNumber( g );
+        }
+
+        return m_a + takeMod( x );
+    }
 };
