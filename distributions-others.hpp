@@ -26,7 +26,7 @@ public:
 		auto r = x % distance;
 		while (x - r > (-distance)) {
 			x = drawNumber(g);
-			r = x & distance;
+			r = x % distance;
 		}
 		return m_a + r;
 	}
@@ -55,7 +55,7 @@ public:
 		auto r = x % m_distance;
 		while (x - r > (-m_distance)) {
 			x = drawNumber(g);
-			r = x & m_distance;
+			r = x % m_distance;
 		}
 		return m_a + r;
 	}
